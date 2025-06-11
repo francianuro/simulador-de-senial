@@ -1,51 +1,68 @@
 "use client"
 
 import { useState } from "react"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { simularTransmision } from "../services/transmission-service.js"
 
 export default function SimuladorTransmision() {
-  const [medioTransmision, setMedioTransmision] = useState("coaxial")
-  const [distancia, setDistancia] = useState(0)
-  const [tipoSenal, setTipoSenal] = useState("analogica")
-  const [anchoBanda, setAnchoBanda] = useState(0)
-  const [nivelRuido, setNivelRuido] = useState(0)
+  const [medioTransmision, setMedioTransmision] = useState("")
+  const [distancia, setDistancia] = useState("")
+  const [tipoSenal, setTipoSenal] = useState("")
+  const [anchoBanda, setAnchoBanda] = useState("")
+  const [nivelRuido, setNivelRuido] = useState("")
   const [resultados, setResultados] = useState({
     atenuacion: 0,
     snr: 0,
     velocidadEfectiva: 0,
     interferencia: "-",
+    capacidadTeorica: 0,
   })
   const [simulado, setSimulado] = useState(false)
-
-  const calcularResultados = () => {
-    const atenuacion = distancia * 0.1 + (medioTransmision === "coaxial" ? 2 : 5)
-    const snr = 30 - nivelRuido - atenuacion * 0.5
-    const velocidadEfectiva = anchoBanda * 1000 * (snr / 30) * (tipoSenal === "digital" ? 2 : 1)
-
-    let interferencia = "-"
-    if (nivelRuido > 10) {
-      interferencia = "Térmica"
-    } else if (distancia > 100) {
-      interferencia = "Atenuación"
-    } else if (anchoBanda > 50) {
-      interferencia = "Intermodulación"
-    }
-
-    setResultados({
-      atenuacion: Number.parseFloat(atenuacion.toFixed(2)),
-      snr: Number.parseFloat(snr.toFixed(2)),
-      velocidadEfectiva: Math.round(velocidadEfectiva),
-      interferencia,
-    })
-
-    setSimulado(true)
-  }
+  const [error, setError] = useState("")
 
   const handleSimular = () => {
-    calcularResultados()
+    try {
+      setError("")
+
+      // Convertir strings a números, manejando comas como separadores decimales
+      const parametros = {
+        medioTransmision: medioTransmision.toLowerCase().replace(/\s+/g, "_"),
+        distancia: parseFloat(distancia.replace(",", ".")),
+        tipoSenal: tipoSenal.toLowerCase(),
+        anchoBanda: parseFloat(anchoBanda.replace(",", ".")),
+        nivelRuido: parseFloat(nivelRuido.replace(",", ".")),
+      }
+
+      // Validar que todos los campos estén completos
+      if (
+        !parametros.medioTransmision ||
+        isNaN(parametros.distancia) ||
+        !parametros.tipoSenal ||
+        isNaN(parametros.anchoBanda) ||
+        isNaN(parametros.nivelRuido)
+      ) {
+        throw new Error("Por favor complete todos los campos con valores válidos")
+      }
+
+      const resultadosCalculados = simularTransmision(parametros)
+      setResultados(resultadosCalculados)
+      setSimulado(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error en el cálculo")
+      setSimulado(false)
+    }
+  }
+
+  const isFormValid = () => {
+    return (
+      medioTransmision.trim() !== "" &&
+      distancia.trim() !== "" &&
+      tipoSenal.trim() !== "" &&
+      anchoBanda.trim() !== "" &&
+      nivelRuido.trim() !== ""
+    )
   }
 
   return (
@@ -61,56 +78,63 @@ export default function SimuladorTransmision() {
           <div className="space-y-4">
             <div>
               <label className="block mb-2 font-medium">Medio de transmisión</label>
-              <Select value={medioTransmision} onValueChange={setMedioTransmision}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar medio" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="coaxial">Coaxial</SelectItem>
-                  <SelectItem value="fibra">Fibra óptica</SelectItem>
-                  <SelectItem value="radiofrecuencia">Radiofrecuencia</SelectItem>
-                </SelectContent>
-              </Select>
+              <Input
+                type="text"
+                value={medioTransmision}
+                onChange={(e) => setMedioTransmision(e.target.value)}
+                placeholder="ej: coaxial, fibra, radiofrecuencia"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Opciones: coaxial, fibra, radiofrecuencia, par trenzado, microondas
+              </p>
             </div>
 
             <div>
               <label className="block mb-2 font-medium">Distancia (m)</label>
-              <Input type="number" value={distancia} onChange={(e) => setDistancia(Number(e.target.value))} min="0" />
+              <Input
+                type="text"
+                value={distancia}
+                onChange={(e) => setDistancia(e.target.value)}
+                placeholder="ej: 100 o 100,5"
+              />
             </div>
 
             <div>
               <label className="block mb-2 font-medium">Tipo de señal</label>
-              <Select value={tipoSenal} onValueChange={setTipoSenal}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="analogica">Analógica</SelectItem>
-                  <SelectItem value="digital">Digital</SelectItem>
-                </SelectContent>
-              </Select>
+              <Input
+                type="text"
+                value={tipoSenal}
+                onChange={(e) => setTipoSenal(e.target.value)}
+                placeholder="analógica o digital"
+              />
             </div>
 
             <div>
               <label className="block mb-2 font-medium">Ancho de banda (MHz)</label>
-              <Input type="number" value={anchoBanda} onChange={(e) => setAnchoBanda(Number(e.target.value))} min="0" />
+              <Input
+                type="text"
+                value={anchoBanda}
+                onChange={(e) => setAnchoBanda(e.target.value)}
+                placeholder="ej: 20 o 20,5"
+              />
             </div>
 
             <div>
               <label className="block mb-2 font-medium">Nivel de ruido (dB)</label>
-              <Input type="number" value={nivelRuido} onChange={(e) => setNivelRuido(Number(e.target.value))} min="0" />
+              <Input
+                type="text"
+                value={nivelRuido}
+                onChange={(e) => setNivelRuido(e.target.value)}
+                placeholder="ej: 5 o 5,2"
+              />
             </div>
+
+            {error && <div className="text-red-500 text-sm p-2 bg-red-50 rounded">{error}</div>}
 
             <Button
               className="w-full bg-gray-200 hover:bg-gray-300 text-black"
               onClick={handleSimular}
-              disabled={
-                !medioTransmision ||
-                distancia === undefined ||
-                !tipoSenal ||
-                anchoBanda === undefined ||
-                nivelRuido === undefined
-              }
+              disabled={!isFormValid()}
             >
               Simular
             </Button>
@@ -144,6 +168,9 @@ export default function SimuladorTransmision() {
                     <p className="text-sm text-gray-500">
                       Simulación de transmisión {tipoSenal} a través de {medioTransmision}
                     </p>
+                    <p className="text-xs text-gray-400 mt-2">
+                      Distancia: {distancia}m | Ancho de banda: {anchoBanda}MHz
+                    </p>
                   </div>
                 ) : (
                   <p className="text-gray-400">
@@ -161,21 +188,29 @@ export default function SimuladorTransmision() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div>
-                    <h3 className="font-medium">Atenuación</h3>
-                    <p className="text-2xl font-bold">{resultados.atenuacion} dB</p>
+                    <h3 className="font-medium">Atenuación (dB)</h3>
+                    <p className="text-2xl font-bold">{resultados.atenuacion}</p>
                   </div>
                   <div>
                     <h3 className="font-medium">Relación señal-ruido (SNR)</h3>
                     <p className="text-2xl font-bold">{resultados.snr} dB</p>
                   </div>
                   <div>
-                    <h3 className="font-medium">Velocidad efectiva</h3>
-                    <p className="text-2xl font-bold">{resultados.velocidadEfectiva} bps</p>
+                    <h3 className="font-medium">Velocidad efectiva (BPS)</h3>
+                    <p className="text-2xl font-bold">{resultados.velocidadEfectiva.toLocaleString()}</p>
                   </div>
                   <div>
-                    <h3 className="font-medium">Tipo de interferencia predominante</h3>
+                    <h3 className="font-medium">Interferencia predominante</h3>
                     <p className="text-2xl font-bold">{resultados.interferencia}</p>
                   </div>
+                  {simulado && (
+                    <div className="pt-2 border-t">
+                      <h3 className="font-medium text-sm">Capacidad teórica (Shannon)</h3>
+                      <p className="text-lg font-semibold text-gray-600">
+                        {resultados.capacidadTeorica.toLocaleString()} bps
+                      </p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
